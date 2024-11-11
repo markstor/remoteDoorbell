@@ -128,6 +128,8 @@ def on_message(client, userdata, msg):
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
+client.username_pw_set("your_username", "your_password")
+
 client.connect(MQTT_BROKER, 1883, 60)
 
 # Start MQTT loop in the background
