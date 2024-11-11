@@ -53,16 +53,13 @@ class ButtonController:
         return topic
 
     def component_discovery_payload(self):
-        return {
-            "name": self.button_name,
+        return {self.object_id:{
+            "p": "button",
             "state_topic": f"{self.topic}/state",
             "availability_topic": f"{self.topic}/availability",
-            "device_class": "motion",  # Adjust as necessary
-            "payload_on": "pressed",
-            "payload_off": "released",
+            "device_class": "motion",
             "unique_id": f"{MQTT_UNIQUE_ID}_{self.object_id}",
-            "device": {"identifiers": [MQTT_UNIQUE_ID]}  # Link to main device
-        }
+        }}
     
     
 
@@ -96,7 +93,7 @@ def generate_discovery_payload(components_dict):
     return discovery_payload
 
 def publish_discovery_payload(buttons):
-    components = [button.component_discovery_payload() for button in buttons]
+    components = {**button.component_discovery_payload() for button in buttons}
     discovery_payload = generate_discovery_payload(components)
     prefix = MQTT_DISCOVERY_PREFIX
     component = "device"
@@ -105,8 +102,8 @@ def publish_discovery_payload(buttons):
     client.publish(topic, json.dumps(discovery_payload), qos=1, retain=True)
 
 buttons = [
-    ButtonController(17, "doorButton"),
-    ButtonController(27, "videoButton")
+    ButtonController(14, "doorButton"),
+    ButtonController(15, "videoButton")
 ]
 
 def on_connect(client, userdata, flags, rc):
@@ -122,10 +119,8 @@ def on_message(client, userdata, msg):
     print(f"Received message on topic {msg.topic}: {msg.payload.decode()}")
     for button in buttons:
         if msg.topic == button.topic:
-            button.activate_button()
-
-
-
+            #button.activate_button()
+            print(button.name, "detected")
 
 # Setup MQTT client
 client = mqtt.Client()
