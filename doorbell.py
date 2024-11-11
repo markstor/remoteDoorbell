@@ -93,7 +93,9 @@ def generate_discovery_payload(components_dict):
     return discovery_payload
 
 def publish_discovery_payload(buttons):
-    components = {**button.component_discovery_payload() for button in buttons}
+    components = {}
+    for button in buttons:
+        components.update(button.component_discovery_payload())
     discovery_payload = generate_discovery_payload(components)
     prefix = MQTT_DISCOVERY_PREFIX
     component = "device"
