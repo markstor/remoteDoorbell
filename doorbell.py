@@ -6,7 +6,7 @@ from signal import pause
 import paho.mqtt.client as mqtt
 
 # MQTT Setup
-MQTT_BROKER = "ha.casalprim.xyz"
+MQTT_BROKER = "homeassistant.casa.casalprim.xyz"
 
 
 MQTT_DISCOVERY_PREFIX = "homeassistant"
