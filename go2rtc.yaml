@@ -1,0 +1,5 @@
+streams:
+    # stream: ffmpeg:device?video=0#video=h264
+    stream: ffmpeg:/home/marc/doorbell/testvid.mp4#video=copy#audio=pcmu
+    # play_pcma: exec:ffplay -fflags nobuffer -f alaw -ar 8000 -i -#backchannel=1
+    play_pcma: exec:ffmpeg -f alaw -ar 8000 -i - -c:a libmp3lame -b:a 64k /home/marc/doorbell/output.mp3#backchannel=1

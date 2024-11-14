@@ -1,8 +1,9 @@
 import logging
 import json
 import time
-from gpiozero import Button, OutputDevice, DigitalOutputDevice
+from gpiozero import Button, DigitalOutputDevice, DigitalInputDevice
 from signal import pause
+import subprocess
 import paho.mqtt.client as mqtt
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,115 @@ with open('mqtt_config.json') as f:
     MQTT_PASSWORD = credentials['password']
 
 HA_DISCOVERY_PREFIX = "homeassistant"
+       
+class Component:
+    PLATFORM = "component"
+    def __init__(self, parent_device, name):
+        self.parent_device = parent_device
+        self.name = name
+
+    @property
+    def object_id(self):
+        # sanitize name
+        return f"{self.name.lower().replace(' ', '')}"
+    @property
+    def client(self):
+        return self.parent_device.client
+
+    @property
+    def root_topic(self):
+        topic = f"{self.parent_device.ROOT_TOPIC}/{self.object_id}"
+        return topic
+
+    def component_discovery_payload(self):
+        return {self.object_id:{
+            "p": self.PLATFORM,
+            "name": self.name,
+            "state_topic": f"{self.root_topic}/state",
+            "availability_topic": f"{self.root_topic}/availability",
+            "command_topic": f"{self.root_topic}/command",
+            "unique_id": f"{self.parent_device.DEVICE_UNIQUE_ID}_{self.object_id}",
+        }}
+class ButtonComponent(Component):
+    PLATFORM = "button"
+    def __init__(self, parent_device, gpio_pin, name=None, active_time=0.2):
+        if name is None:
+            name = f"Button{self.gpio_pin}"
+        super().__init__(parent_device, name)
+        self.active_time = active_time
+        self.gpio_pin = gpio_pin
+        self.configure_input_button()
+
+    def configure_input_button(self):
+        self.input_button = Button(self.gpio_pin, pull_up=False)
+        self.input_button.when_pressed = self.on_button_press
+
+    def on_button_press(self):
+        logging.info(f"Button {self.name} on pin {self.input_button.pin.number} was pressed!")
+        self.client.publish(f"{self.root_topic}/command", "PRESS", qos=1)
+
+    def activate_button(self):
+        logging.info(f"Activating button on pin {self.output_control.pin.number}")
+        
+        self.input_button.close()
+        with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
+            output_control.on()
+            time.sleep(self.active_time)
+            output_control.off()
+        self.configure_input_button()
+
+class DoorSensor(Component):
+    PLATFORM = "binary_sensor"
+    def __init__(self, parent_device, name, gpio_pin):
+        super().__init__(parent_device, name)
+        self.gpio_pin = gpio_pin
+        self.input = DigitalInputDevice(self.gpio_pin)
+        self.input.when_activated = self.on_activation
+        self.input.when_deactivated = self.on_deactivation
+    
+    def on_activation(self):
+        logging.info(f"Detected someone at the door!")
+        self.client.publish(f"{self.root_topic}/state", "ON", qos=1)
+    
+    def on_deactivation(self):
+        logging.info(f"No one at the door")
+        self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)    
+
+class VideoSensor(Component):
+    PLATFORM = "binary_sensor"
+    def __init__(self, parent_device, name, gpio_pin):
+        super().__init__(parent_device, name)
+        self.gpio_pin = gpio_pin
+        self.input = DigitalInputDevice(self.gpio_pin)
+        self.input.when_activated = self.on_activation
+        self.input.when_deactivated = self.on_deactivation
+    
+    def on_activation(self):
+        logging.info(f"Video input available!")
+        self.client.publish(f"{self.root_topic}/state", "ON", qos=1)
+        self.parent_device.start_video_stream()
+    
+    def on_deactivation(self):
+        logging.info(f"Video input not available")
+        self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)
+        self.parent_device.stop_video_stream()    
+
+class PickUpSwitch(Component):
+    PLATFORM = "switch"
+    def __init__(self, parent_device, name, gpio_pin):
+        super().__init__(parent_device, name)
+        self.gpio_pin = gpio_pin
+        self.input = DigitalInputDevice(self.gpio_pin)
+        self.input.when_activated = self.on_activation
+        self.input.when_deactivated = self.on_deactivation
+    
+    def on_activation(self):
+        logging.info(f"Pickup switch activated!")
+        self.client.publish(f"{self.root_topic}/state", "ON", qos=1)
+    
+    def on_deactivation(self):
+        logging.info(f"Pickup switch deactivated")
+        self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)
 
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
@@ -25,10 +135,12 @@ class DoorBellDevice:
             components = []
         self.components = components
         self.client = client
+        self.pickup_switch = None
     
     def add_button(self, gpiopin, button_name = None):
         button = ButtonComponent(self, gpiopin, button_name)
         self.components.append(button)
+        return button
     
     @property
     def discovery_topic(self):
@@ -80,13 +192,20 @@ class DoorBellDevice:
             logging.debug(f"Availability message published in topic {component.root_topic}/availability")
         logging.info(f"Availability status published: {payload}")
     
-    def setup(self):        
+    def setup(self):
+        self.add_button(14, "Door Button")
+        self.add_button(15, "Video Button")
+        self.components.append(DoorSensor(self, "Door Sensor", 18))
+        self.components.append(VideoSensor(self, "Video Sensor", 23))
+        self.pickup_switch = PickUpSwitch(self, "Pickup Switch", 24)
+        self.components.append(self.pickup_switch)
+
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
-            # Subscribe to all component topics
-            for cmp in self.components:
-                logger.info(f"Subscribing to topic {cmp.root_topic}")
-                client.subscribe(cmp.root_topic)
+            # Subscribe to all sub topics
+            topic_pattern = f"{self.ROOT_TOPIC}/#"
+            client.subscribe(topic_pattern)
+            logger.info(f"Subscribed to {topic_pattern}")
             # Publish discovery payload
             self.publish_discovery_payload()
             self.publish_availability("online")
@@ -106,58 +225,27 @@ class DoorBellDevice:
         self.publish_availability("offline")
         del self.components
         self.components = []
-        
+    
+    def start_video_stream(self):
+        logging.info("Starting video stream...")
+        # stream video using go2rtc
+        """
+        configured with following yaml:
+        streams:
+            stream: ffmpeg:device?video=0#video=h264
+            play_pcma: exec:ffplay -fflags nobuffer -f alaw -ar 8000 -i -#backchannel=1
+        """
+        # start video stream
+        subprocess.Popen(["go2rtc", "-c", "go2rtc.yaml"])
+    
+    def stop_video_stream(self):
+        # Stop RTSP stream video from USB device
+        logging.info("Stopping video stream...")
+        # stop video stream
+        subprocess.Popen(["killall", "go2rtc"])
 
-class ButtonComponent:
-    def __init__(self, parent_device: DoorBellDevice, gpio_pin, button_name=None, active_time=0.2):
-        self.active_time = active_time
-        self.gpio_pin = gpio_pin
-        self.button_name = button_name
-        self.parent_device = parent_device
-        if self.button_name is None:
-            self.button_name = f"Button{self.gpio_pin}"
-        self.configure_input_button()
 
-    def configure_input_button(self):
-        self.input_button = Button(self.gpio_pin, pull_up=False)
-        self.input_button.when_pressed = self.on_button_press
 
-    def on_button_press(self):
-        logging.info(f"Button on pin {self.input_button.pin.number} was pressed!")
-        
-        # Log button press via MQTT
-        message = {"button": self.input_button.pin.number, "action": "pressed"}
-        self.parent_device.client.publish(f"{self.root_topic}/command", json.dumps(message), qos=1)
-
-    def activate_button(self):
-        logging.info(f"Activating button on pin {self.output_control.pin.number}")
-        
-        self.input_button.close()
-        with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
-            output_control.on()
-            time.sleep(self.active_time)
-            output_control.off()
-        self.configure_input_button()
-
-    @property
-    def object_id(self):
-        # sanitize button name
-        return f"{self.button_name.lower().replace(' ', '')}"
-
-    @property
-    def root_topic(self):
-        topic = f"home/doorbell/{self.object_id}"
-        return topic
-
-    def component_discovery_payload(self):
-        return {self.object_id:{
-            "p": "button",
-            "name": self.button_name,
-            "state_topic": f"{self.root_topic}/state",
-            "availability_topic": f"{self.root_topic}/availability",
-            "command_topic": f"{self.root_topic}/command",
-            "unique_id": f"{self.parent_device.DEVICE_UNIQUE_ID}_{self.object_id}",
-        }}
 
 def main():
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -165,8 +253,6 @@ def main():
     client = mqtt.Client()
     
     doorbell = DoorBellDevice(client)
-    doorbell.add_button(14, "Door Button")
-    doorbell.add_button(15, "Video Button")
     doorbell.setup()
 
     client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
