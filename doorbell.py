@@ -85,7 +85,7 @@ class ButtonComponent(Component):
 
     def on_button_press(self):
         logging.info(f"Button {self.name} on pin {self.input_button.pin.number} was pressed!")
-        self.client.publish(f"{self.root_topic}/command", "PRESS", qos=1)
+        self.client.publish(f"{self.root_topic}/state", "PRESS", qos=1)
 
     def handle_command(self, payload):
         if payload == "PRESS":
@@ -161,14 +161,12 @@ class PickUpSwitch(Component):
         if payload == "ON":
             logging.info(f"Activating pickup switch")
             self.input.close()
-            with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
+            with DigitalOutputDevice(self.gpio_pin, active_high=True) as output_control:
                 output_control.on()
-            self.configure_input_pin()
         elif payload == "OFF":
             logging.info(f"Deactivating pickup switch")
+            # we set it on High-Z, to not battle the physical switch
             self.input.close()
-            with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
-                output_control.off()
             self.configure_input_pin()
         else:
             logging.warning(f"Unknown command received: {payload}")
@@ -229,6 +227,10 @@ class DoorBellDevice:
         logging.debug(f"Payload: {discovery_payload}")
         logging.info(f"Discovery payload published in topic {self.discovery_topic}")
     
+    def remove_discovery_payload(self):
+        self.client.publish(self.discovery_topic, "", qos=1, retain=True)
+        logging.info(f"Discovery payload removed from topic {self.discovery_topic}")
+    
     def publish_availability(self, payload = "online"):
         availability_topic = f"{self.ROOT_TOPIC}/availability"
         self.client.publish(availability_topic, payload, qos=1, retain=True)
@@ -242,10 +244,10 @@ class DoorBellDevice:
     def setup(self):
         self.add_button(14, "Door Button")
         self.add_button(15, "Video Button")
-        self.components.append(DoorSensor(self, "Door Sensor", 18))
-        self.components.append(VideoSensor(self, "Video Sensor", 23))
-        self.pickup_switch = PickUpSwitch(self, "Pickup Switch", 24)
-        self.components.append(self.pickup_switch)
+        self.components.append(DoorSensor(self, "Door Sensor", 2))
+        self.components.append(VideoSensor(self, "Video Sensor", 4))
+        # self.pickup_switch = PickUpSwitch(self, "Pickup Switch", 24)
+        # self.components.append(self.pickup_switch)
 
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
@@ -273,14 +275,6 @@ class DoorBellDevice:
     
     def start_video_stream(self):
         logging.info("Starting video stream...")
-        # stream video using go2rtc
-        """
-        configured with following yaml:
-        streams:
-            stream: ffmpeg:device?video=0#video=h264
-            play_pcma: exec:ffplay -fflags nobuffer -f alaw -ar 8000 -i -#backchannel=1
-        """
-        # start video stream
         subprocess.Popen(["go2rtc", "-c", "go2rtc.yaml"])
     
     def stop_video_stream(self):
