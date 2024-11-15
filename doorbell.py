@@ -20,6 +20,8 @@ HA_DISCOVERY_PREFIX = "homeassistant"
        
 class Component:
     PLATFORM = "component"
+    SUBTOPICS = ["state", "availability", "command"]
+    TOPIC_HANDLING = ["state", "command"]
     def __init__(self, parent_device, name):
         self.parent_device = parent_device
         self.name = name
@@ -27,7 +29,7 @@ class Component:
     @property
     def object_id(self):
         # sanitize name
-        return f"{self.name.lower().replace(' ', '')}"
+        return f"{self.name.lower().replace(' ', '_')}"
     @property
     def client(self):
         return self.parent_device.client
@@ -37,15 +39,36 @@ class Component:
         topic = f"{self.parent_device.ROOT_TOPIC}/{self.object_id}"
         return topic
 
+    def subtopics_dict(self):
+        return {f"{subtopic}_topic": f"{self.root_topic}/{subtopic}" for subtopic in self.SUBTOPICS}
+
     def component_discovery_payload(self):
         return {self.object_id:{
             "p": self.PLATFORM,
             "name": self.name,
-            "state_topic": f"{self.root_topic}/state",
-            "availability_topic": f"{self.root_topic}/availability",
-            "command_topic": f"{self.root_topic}/command",
+            **self.subtopics_dict(),
+            "object_id": self.object_id,
             "unique_id": f"{self.parent_device.DEVICE_UNIQUE_ID}_{self.object_id}",
         }}
+
+    def handle_message(self, msg):
+        topic = msg.topic
+        payload = msg.payload.decode()
+        if topic == self.state_topic:
+            self.handle_state(payload)
+        elif topic == self.command_topic:
+            self.handle_command(payload)
+    
+    def handle_state(self, payload):
+        pass
+    
+    def handle_command(self, payload):
+        pass
+
+    def topics_subscribe(self):
+        for topic in self.TOPIC_HANDLING:
+            self.client.subscribe(f"{self.root_topic}/{topic}")
+
 class ButtonComponent(Component):
     PLATFORM = "button"
     def __init__(self, parent_device, gpio_pin, name=None, active_time=0.2):
@@ -64,18 +87,22 @@ class ButtonComponent(Component):
         logging.info(f"Button {self.name} on pin {self.input_button.pin.number} was pressed!")
         self.client.publish(f"{self.root_topic}/command", "PRESS", qos=1)
 
-    def activate_button(self):
-        logging.info(f"Activating button on pin {self.output_control.pin.number}")
-        
-        self.input_button.close()
-        with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
-            output_control.on()
-            time.sleep(self.active_time)
-            output_control.off()
-        self.configure_input_button()
+    def handle_command(self, payload):
+        if payload == "PRESS":
+            logging.info(f"Activating button on pin {self.output_control.pin.number}")
+            
+            self.input_button.close()
+            with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
+                output_control.on()
+                time.sleep(self.active_time)
+                output_control.off()
+            self.configure_input_button()
+        else:
+            logging.warning(f"Unknown command received: {payload}")
 
 class DoorSensor(Component):
     PLATFORM = "binary_sensor"
+    TOPIC_HANDLING = []
     def __init__(self, parent_device, name, gpio_pin):
         super().__init__(parent_device, name)
         self.gpio_pin = gpio_pin
@@ -93,6 +120,7 @@ class DoorSensor(Component):
 
 class VideoSensor(Component):
     PLATFORM = "binary_sensor"
+    TOPIC_HANDLING = []
     def __init__(self, parent_device, name, gpio_pin):
         super().__init__(parent_device, name)
         self.gpio_pin = gpio_pin
@@ -115,6 +143,8 @@ class PickUpSwitch(Component):
     def __init__(self, parent_device, name, gpio_pin):
         super().__init__(parent_device, name)
         self.gpio_pin = gpio_pin
+    
+    def configure_input_pin(self):
         self.input = DigitalInputDevice(self.gpio_pin)
         self.input.when_activated = self.on_activation
         self.input.when_deactivated = self.on_deactivation
@@ -126,6 +156,22 @@ class PickUpSwitch(Component):
     def on_deactivation(self):
         logging.info(f"Pickup switch deactivated")
         self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)
+    
+    def handle_command(self, payload):
+        if payload == "ON":
+            logging.info(f"Activating pickup switch")
+            self.input.close()
+            with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
+                output_control.on()
+            self.configure_input_pin()
+        elif payload == "OFF":
+            logging.info(f"Deactivating pickup switch")
+            self.input.close()
+            with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
+                output_control.off()
+            self.configure_input_pin()
+        else:
+            logging.warning(f"Unknown command received: {payload}")
 
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
@@ -157,7 +203,7 @@ class DoorBellDevice:
 
         discovery_payload = {
         "dev": {
-            "ids": self.DEVICE_UNIQUE_ID,  # Unique ID for the device
+            "ids": self.DEVICE_UNIQUE_ID,
             "name": "Interfono",
             "mf": "PRIM, S.A.",
             "mdl": "UltraGuard",
@@ -171,8 +217,8 @@ class DoorBellDevice:
             "url": "https://blog.casalprim.xyz"
         },
         "cmps": components_dict,
-        "state_topic": f"{self.ROOT_TOPIC}/state",
-        "availability_topic": f"{self.ROOT_TOPIC}/availability",
+        # "state_topic": f"{self.ROOT_TOPIC}/state",
+        # "availability_topic": f"{self.ROOT_TOPIC}/availability",
         "qos": 1
         }
         return discovery_payload
@@ -188,8 +234,9 @@ class DoorBellDevice:
         self.client.publish(availability_topic, payload, qos=1, retain=True)
         logging.debug(f"Availability message published in topic {availability_topic}")
         for component in self.components:
-            self.client.publish(f"{component.root_topic}/availability", payload, qos=1, retain=True)
-            logging.debug(f"Availability message published in topic {component.root_topic}/availability")
+            availability_topic = component.subtopics_dict()["availability_topic"]
+            self.client.publish(availability_topic, payload, qos=1, retain=True)
+            logging.debug(f"Availability message published in topic {availability_topic}")
         logging.info(f"Availability status published: {payload}")
     
     def setup(self):
@@ -202,20 +249,18 @@ class DoorBellDevice:
 
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
-            # Subscribe to all sub topics
-            topic_pattern = f"{self.ROOT_TOPIC}/#"
-            client.subscribe(topic_pattern)
-            logger.info(f"Subscribed to {topic_pattern}")
-            # Publish discovery payload
+            for cmp in self.components:
+                for topic_pattern in cmp.topics_subscribe():
+                    client.subscribe(topic_pattern)
+                    logging.info(f"Subscribed to {topic_pattern}")
             self.publish_discovery_payload()
             self.publish_availability("online")
 
         def on_message(client, userdata, msg):
             logging.info(f"Received message on topic {msg.topic}: {msg.payload.decode()}")
             for cmp in self.components:
-                if msg.topic == cmp.root_topic:
-                    #button.activate_button()
-                    logging.info(f"Button {cmp.object_id} activated")
+                if msg.topic.startswith(cmp.root_topic):
+                    cmp.handle_message(msg)
 
         self.client.on_connect = on_connect
         self.client.on_message = on_message
