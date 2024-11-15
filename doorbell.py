@@ -65,9 +65,10 @@ class Component:
     def handle_command(self, payload):
         pass
 
-    def topics_subscribe(self):
+    def subscribe(self):
         for topic in self.TOPIC_HANDLING:
             self.client.subscribe(f"{self.root_topic}/{topic}")
+            logging.info(f"Subscribed to {self.root_topic}/{topic}")
 
 class ButtonComponent(Component):
     PLATFORM = "button"
@@ -252,9 +253,7 @@ class DoorBellDevice:
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
             for cmp in self.components:
-                for topic_pattern in cmp.topics_subscribe():
-                    client.subscribe(topic_pattern)
-                    logging.info(f"Subscribed to {topic_pattern}")
+                cmp.subscribe()
             self.publish_discovery_payload()
             self.publish_availability("online")
 
