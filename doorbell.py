@@ -42,6 +42,14 @@ class Component:
     def subtopics_dict(self):
         return {f"{subtopic}_topic": f"{self.root_topic}/{subtopic}" for subtopic in self.SUBTOPICS}
 
+    @property
+    def state_topic(self): 
+        return f"{self.root_topic}/state"
+    
+    @property
+    def command_topic(self):
+        return f"{self.root_topic}/command"
+
     def component_discovery_payload(self):
         return {self.object_id:{
             "p": self.PLATFORM,
@@ -245,7 +253,7 @@ class DoorBellDevice:
     def setup(self):
         self.add_button(14, "Door Button")
         self.add_button(15, "Video Button")
-        self.components.append(DoorSensor(self, "Door Sensor", 17))
+        # self.components.append(DoorSensor(self, "Door Sensor", 17))
         self.components.append(VideoSensor(self, "Video Sensor", 4))
         # self.pickup_switch = PickUpSwitch(self, "Pickup Switch", 24)
         # self.components.append(self.pickup_switch)
