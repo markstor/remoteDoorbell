@@ -98,8 +98,7 @@ class ButtonComponent(Component):
 
     def handle_command(self, payload):
         if payload == "PRESS":
-            logging.info(f"Activating button on pin {self.gpio_pin}")
-            
+            logging.info(f"Activating button on pin {self.gpio_pin}")            
             self.input_button.close()
             with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
                 output_control.on()
@@ -310,13 +309,14 @@ def main():
     try:
         # Wait for events indefinitely
         pause()
-
     except KeyboardInterrupt:
-        doorbell.shutdown()
-        logging.info("Exiting script...")
-
-    client.loop_stop()
-    client.disconnect()
+        logging.info("CTRL+c Manually exiting script...")
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}", exc_info=True)
+    finally:
+        doorbell.shutdown()        
+        client.loop_stop()
+        client.disconnect()
 
 if __name__ == "__main__":
     main()
