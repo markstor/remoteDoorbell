@@ -93,12 +93,12 @@ class ButtonComponent(Component):
         self.input_button.when_pressed = self.on_button_press
 
     def on_button_press(self):
-        logging.info(f"Button {self.name} on pin {self.input_button.pin.number} was pressed!")
+        logging.info(f"Button {self.name} on pin {self.gpio_pin} was pressed!")
         self.client.publish(f"{self.root_topic}/state", "PRESS", qos=1)
 
     def handle_command(self, payload):
         if payload == "PRESS":
-            logging.info(f"Activating button on pin {self.output_control.pin.number}")
+            logging.info(f"Activating button on pin {self.gpio_pin}")
             
             self.input_button.close()
             with DigitalOutputDevice(self.gpio_pin, active_high=False) as output_control:
