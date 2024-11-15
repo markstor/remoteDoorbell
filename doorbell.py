@@ -281,7 +281,7 @@ class DoorBellDevice:
     
     def start_video_stream(self):
         logging.info("Starting video stream...")
-        subprocess.Popen(["go2rtc", "-c", "go2rtc.yaml"])
+        subprocess.Popen(["./go2rtc", "-c", "go2rtc.yaml"])
     
     def stop_video_stream(self):
         # Stop RTSP stream video from USB device
