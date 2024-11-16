@@ -8,6 +8,10 @@ import paho.mqtt.client as mqtt
 
 logger = logging.getLogger(__name__)
 
+DOOR_BUTTON_GPIO = 14
+VIDEO_BUTTON_GPIO = 15
+VIDEO_SENSOR_GPIO = 4
+
 # Load MQTT setup from file
 with open('mqtt_config.json') as f:
     credentials = json.load(f)
@@ -108,24 +112,6 @@ class ButtonComponent(Component):
         else:
             logging.warning(f"Unknown command received: {payload}")
 
-class DoorSensor(Component):
-    PLATFORM = "binary_sensor"
-    TOPIC_HANDLING = []
-    def __init__(self, parent_device, name, gpio_pin):
-        super().__init__(parent_device, name)
-        self.gpio_pin = gpio_pin
-        self.input = DigitalInputDevice(self.gpio_pin)
-        self.input.when_activated = self.on_activation
-        self.input.when_deactivated = self.on_deactivation
-    
-    def on_activation(self):
-        logging.info(f"Detected someone at the door!")
-        self.client.publish(f"{self.root_topic}/state", "ON", qos=1)
-    
-    def on_deactivation(self):
-        logging.info(f"No one at the door")
-        self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)    
-
 class VideoSensor(Component):
     PLATFORM = "binary_sensor"
     TOPIC_HANDLING = []
@@ -145,39 +131,6 @@ class VideoSensor(Component):
         logging.info(f"Video input not available")
         self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)
         self.parent_device.stop_video_stream()    
-
-class PickUpSwitch(Component):
-    PLATFORM = "switch"
-    def __init__(self, parent_device, name, gpio_pin):
-        super().__init__(parent_device, name)
-        self.gpio_pin = gpio_pin
-    
-    def configure_input_pin(self):
-        self.input = DigitalInputDevice(self.gpio_pin)
-        self.input.when_activated = self.on_activation
-        self.input.when_deactivated = self.on_deactivation
-    
-    def on_activation(self):
-        logging.info(f"Pickup switch activated!")
-        self.client.publish(f"{self.root_topic}/state", "ON", qos=1)
-    
-    def on_deactivation(self):
-        logging.info(f"Pickup switch deactivated")
-        self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)
-    
-    def handle_command(self, payload):
-        if payload == "ON":
-            logging.info(f"Activating pickup switch")
-            self.input.close()
-            with DigitalOutputDevice(self.gpio_pin, active_high=True) as output_control:
-                output_control.on()
-        elif payload == "OFF":
-            logging.info(f"Deactivating pickup switch")
-            # we set it on High-Z, to not battle the physical switch
-            self.input.close()
-            self.configure_input_pin()
-        else:
-            logging.warning(f"Unknown command received: {payload}")
 
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
@@ -250,12 +203,9 @@ class DoorBellDevice:
         logging.info(f"Availability status published: {payload}")
     
     def setup(self):
-        self.add_button(14, "Door Button")
-        self.add_button(15, "Video Button")
-        # self.components.append(DoorSensor(self, "Door Sensor", 17))
-        self.components.append(VideoSensor(self, "Video Sensor", 4))
-        # self.pickup_switch = PickUpSwitch(self, "Pickup Switch", 24)
-        # self.components.append(self.pickup_switch)
+        self.add_button(DOOR_BUTTON_GPIO, "Door Button")
+        self.add_button(VIDEO_BUTTON_GPIO, "Video Button")
+        self.components.append(VideoSensor(self, "Video Sensor", VIDEO_SENSOR_GPIO))
         self.start_go2rtc()
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")

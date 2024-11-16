@@ -1,6 +1,5 @@
+log:
+  level: debug
 streams:
-    stream: 
-        # - ffmpeg:device?video=0#video=h264
-        # - exec:ffplay -fflags nobuffer -f alaw -ar 8000 -i -#backchannel=1
-        - ffmpeg:/home/marc/doorbell/testvid.mp4#video=copy#audio=pcmu
-        - exec:ffmpeg -y -fflags nobuffer -f alaw -ar 8000 -i - -c:a libmp3lame -b:a 64k /home/marc/doorbell/output.mp3#backchannel=1
+    stream:
+        - exec:ffmpeg -hide_banner -v error -f v4l2 -re -i /dev/video0 -r 10 -pix_fmt yuv420p -c:v h264_v4l2m2m -g 50 -bf 0 -b:v 500k -rtsp_transport tcp -f rtsp {output}

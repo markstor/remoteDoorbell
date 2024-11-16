@@ -1,0 +1,14 @@
+[Unit]
+Description = Service that publishes and reacts to MQTT messages to control a doorbell
+After = network.target  
+
+[Service]
+ExecStart = python /CHANGE/THIS/doorbell/doorbell.py
+WorkingDirectory = /CHANGE/THIS/doorbell
+User = CHANGE
+Group = CHANGE
+Restart = on-failure
+RestartSec = 5
+ 
+[Install]
+WantedBy = multi-user.target 

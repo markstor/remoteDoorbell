@@ -1,6 +1,6 @@
 {
-    "host": "your_mqtt_host",
-    "port": "your_mqtt_port",
-    "username": "your_mqtt_username",
-    "password": "your_mqtt_password"
+    "host": "IP_OF_YOUR_HOME_ASSISTANT",
+    "port": "1883",
+    "username": "HA_USERNAME",
+    "password": "HA_PASSWORD"
 }
