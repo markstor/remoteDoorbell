@@ -132,6 +132,25 @@ class VideoSensor(Component):
         self.client.publish(f"{self.root_topic}/state", "OFF", qos=1)
         self.parent_device.stop_video_stream()    
 
+class Camera(Component):
+    PLATFORM = "camera"
+    TOPIC_HANDLING = []
+    SUBTOPICS=["availability"]
+    
+    @property
+    def topic(self):
+        return f"{self.root_topic}/data"
+        
+    def subtopics_dict(self):
+        sd = super().subtopics_dict()
+        sd["topic"]=self.topic
+        return sd
+
+    def publish_frame(self):
+        payload = "" #binary data
+        # TODO: single ffmpeg call
+        self.client(self.topic, payload, qos=1)
+        
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
     ROOT_TOPIC = "home/doorbell"
@@ -206,6 +225,7 @@ class DoorBellDevice:
         self.add_button(DOOR_BUTTON_GPIO, "Door Button")
         self.add_button(VIDEO_BUTTON_GPIO, "Video Button")
         self.components.append(VideoSensor(self, "Video Sensor", VIDEO_SENSOR_GPIO))
+        self.camera = Camera("Doorbell")
         self.start_go2rtc()
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
@@ -241,7 +261,7 @@ class DoorBellDevice:
         subprocess.Popen(["killall", "go2rtc"])
 
     def start_video_stream(self):
-        pass
+        self.camera.publish_frame()
 
     def stop_video_stream(self):
         pass
