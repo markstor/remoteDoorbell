@@ -147,8 +147,28 @@ class Camera(Component):
         return sd
 
     def publish_frame(self):
-        payload = "" #binary data
-        # TODO: single ffmpeg call
+        # Use own RTSP stream to get a snapshot
+        rtsp_url = "rtsp://localhost:8554/stream"
+
+        try:
+            # Use ffmpeg to capture a single frame from the RTSP stream
+            result = subprocess.run(
+            [
+                "ffmpeg",
+                "-i", rtsp_url,        # Input RTSP stream
+                "-vframes", "1",       # Capture a single frame
+                "-f", "image2pipe",    # Output format as raw image data
+                "-vcodec", "png",      # Encode as PNG (adjust as needed)
+                "-"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+            )
+            payload = result.stdout  # Binary data of the frame
+        except subprocess.CalledProcessError as e:
+            print(f"Error capturing frame: {e.stderr.decode()}")
+            return
         self.client(self.topic, payload, qos=1)
         
 class DoorBellDevice:
@@ -226,6 +246,7 @@ class DoorBellDevice:
         self.add_button(VIDEO_BUTTON_GPIO, "Video Button")
         self.components.append(VideoSensor(self, "Video Sensor", VIDEO_SENSOR_GPIO))
         self.camera = Camera("Doorbell")
+        self.components.append(self.camera)
         self.start_go2rtc()
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
