@@ -256,7 +256,7 @@ class DoorBellDevice:
         self.components.append(VideoSensor(self, "Video Sensor", 4))
         # self.pickup_switch = PickUpSwitch(self, "Pickup Switch", 24)
         # self.components.append(self.pickup_switch)
-
+        self.start_go2rtc()
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
             for cmp in self.components:
@@ -278,19 +278,23 @@ class DoorBellDevice:
         self.publish_availability("offline")
         del self.components
         self.components = []
+        self.stop_go2rtc()
     
-    def start_video_stream(self):
+    def start_go2rtc(self):
         logging.info("Starting video stream...")
         subprocess.Popen(["./go2rtc", "-c", "go2rtc.yaml"])
     
-    def stop_video_stream(self):
+    def stop_go2rtc(self):
         # Stop RTSP stream video from USB device
         logging.info("Stopping video stream...")
         # stop video stream
         subprocess.Popen(["killall", "go2rtc"])
 
+    def start_video_stream(self):
+        pass
 
-
+    def stop_video_stream(self):
+        pass
 
 def main():
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
