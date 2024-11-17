@@ -9,6 +9,7 @@ import paho.mqtt.client as mqtt
 
 logger = logging.getLogger(__name__)
 
+# GPIO pins used
 DOOR_BUTTON_GPIO = 14
 VIDEO_BUTTON_GPIO = 15
 VIDEO_SENSOR_GPIO = 4
@@ -144,15 +145,14 @@ class Camera(Component):
         return sd
 
     def publish_frame(self):
-        # Use own RTSP stream to get a snapshot
-        rtsp_url = "rtsp://127.0.0.1:8554/stream"
-
         try:
             # Use ffmpeg to capture a single frame from the RTSP stream
             result = subprocess.run(
                 [
                     "ffmpeg",
-                    "-i", rtsp_url,        # Input RTSP stream      
+                    "-hide_banner",        # Remove initial welcome log
+                    "-v","error",          # Reduce verbosity
+                    "-i", "/dev/video0",        # Input RTSP stream      
                     "-vframes", "1",       # Capture a single frame
                     "-f", "image2pipe",    # Output format as raw image data
                     "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
