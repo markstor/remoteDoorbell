@@ -152,13 +152,11 @@ class Camera(Component):
                     "ffmpeg",
                     "-hide_banner",        # Remove initial welcome log
                     # "-v","error",          # Reduce verbosity
-                    "-i", "/dev/video0",   # Input RTSP stream      
                     "-f", "v4l2",    # Use Video4Linux2 as input format
                     "-i", "/dev/video0",  # Input device
                     "-r", "10",           # Set frame rate (irrelevant for a single frame but needed by some devices)
                     "-pix_fmt", "yuv420p", # Set pixel format
-                    "-c:v", "h264_v4l2m2m",      # Encode as MJPEG (or another format if needed)
-                    "-frames:v", "1",     # Capture only one frame
+                    "-c:v", "h264_v4l2m2m",# Encode as MJPEG (or another format if needed)
                     "-vframes", "1",       # Capture a single frame
                     "-f", "image2pipe",    # Output format as raw image data
                     "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
@@ -170,7 +168,7 @@ class Camera(Component):
             )
             payload = result.stdout  # Binary data of the frame
         except subprocess.CalledProcessError as e:
-            print(f"Error capturing frame: {e.stderr.decode()}")
+            logger.error(f"Error capturing snapshot!", exc_info=True)
             return
         
         # save in filesystem for debugging purposes
