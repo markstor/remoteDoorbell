@@ -155,10 +155,10 @@ class Camera(Component):
             result = subprocess.run(
             [
                 "ffmpeg",
-                "-i", rtsp_url,        # Input RTSP stream
+                "-i", rtsp_url,        # Input RTSP stream      
                 "-vframes", "1",       # Capture a single frame
                 "-f", "image2pipe",    # Output format as raw image data
-                "-vcodec", "png",      # Encode as PNG (adjust as needed)
+                "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
                 "-"
             ],
             stdout=subprocess.PIPE,
