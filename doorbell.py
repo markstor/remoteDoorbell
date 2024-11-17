@@ -145,7 +145,7 @@ class Camera(Component):
 
     def publish_frame(self):
         # Use own RTSP stream to get a snapshot
-        rtsp_url = "rtsp://localhost:8554/stream"
+        rtsp_url = "rtsp://127.0.0.1:8554/stream"
 
         try:
             # Use ffmpeg to capture a single frame from the RTSP stream
@@ -170,10 +170,10 @@ class Camera(Component):
         # save in filesystem for debugging purposes
         with open(f"snapshot.jpg","wb") as f:
             f.write(payload)
-        attributes_dict={"published_at": datetime.datetime.isoformat()}
+        attributes_dict={"published_at": datetime.datetime.today().isoformat()}
         logger.info("published snapshot")
-        self.client.publish(self.subtopics_dict["topic"], payload, qos=1)
-        self.client.publish(self.subtopics_dict["json_attributes"], json.dumps(attributes_dict) , qos=1)
+        self.client.publish(self.subtopics_dict()["topic"], payload, qos=1)
+        self.client.publish(self.subtopics_dict()["json_attributes_topic"], json.dumps(attributes_dict) , qos=1)
 
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
@@ -251,7 +251,6 @@ class DoorBellDevice:
         self.components.append(VideoSensor(self, "Video Sensor", VIDEO_SENSOR_GPIO))
         self.camera = Camera(self, "Doorbell")
         self.components.append(self.camera)
-        self.start_go2rtc()
         def on_connect(client, userdata, flags, rc):
             logging.info(f"Connected with result code {rc}")
             for cmp in self.components:
@@ -288,12 +287,13 @@ class DoorBellDevice:
         logging.info("Stopping video stream...")
         # stop video stream
         subprocess.Popen(["killall", "go2rtc"])
+        subprocess.Popen(["killall", "ffmpeg"])
 
     def start_video_stream(self):
         self.camera.publish_frame()
-
+        self.start_go2rtc()
     def stop_video_stream(self):
-        pass
+        self.stop_go2rtc()
 
 def main():
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
