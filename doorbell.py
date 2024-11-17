@@ -169,7 +169,7 @@ class Camera(Component):
         except subprocess.CalledProcessError as e:
             print(f"Error capturing frame: {e.stderr.decode()}")
             return
-        self.client(self.topic, payload, qos=1)
+        self.client.publish(self.topic, payload, qos=1)
         
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
@@ -245,7 +245,7 @@ class DoorBellDevice:
         self.add_button(DOOR_BUTTON_GPIO, "Door Button")
         self.add_button(VIDEO_BUTTON_GPIO, "Video Button")
         self.components.append(VideoSensor(self, "Video Sensor", VIDEO_SENSOR_GPIO))
-        self.camera = Camera("Doorbell")
+        self.camera = Camera(self, "Doorbell")
         self.components.append(self.camera)
         self.start_go2rtc()
         def on_connect(client, userdata, flags, rc):
