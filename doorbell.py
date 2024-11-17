@@ -270,7 +270,7 @@ class DoorBellDevice:
         signal.signal(signal.SIGTERM, self.shutdown)
 
 
-    def shutdown(self):
+    def shutdown(self, signum=None, frame=None):
         self.publish_availability("offline")
         del self.components
         self.components = []
