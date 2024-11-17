@@ -1,6 +1,7 @@
 import logging
 import json
 import time
+import datetime
 from gpiozero import Button, DigitalOutputDevice, DigitalInputDevice
 import signal
 import subprocess
@@ -135,15 +136,11 @@ class VideoSensor(Component):
 class Camera(Component):
     PLATFORM = "camera"
     TOPIC_HANDLING = []
-    SUBTOPICS=["availability"]
-    
-    @property
-    def topic(self):
-        return f"{self.root_topic}/data"
+    SUBTOPICS=["availability","json_attributes"]
         
     def subtopics_dict(self):
         sd = super().subtopics_dict()
-        sd["topic"]=self.topic
+        sd["topic"]=f"{self.root_topic}/data"
         return sd
 
     def publish_frame(self):
@@ -153,26 +150,31 @@ class Camera(Component):
         try:
             # Use ffmpeg to capture a single frame from the RTSP stream
             result = subprocess.run(
-            [
-                "ffmpeg",
-                "-i", rtsp_url,        # Input RTSP stream      
-                "-vframes", "1",       # Capture a single frame
-                "-f", "image2pipe",    # Output format as raw image data
-                "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
-                "-"
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True
+                [
+                    "ffmpeg",
+                    "-i", rtsp_url,        # Input RTSP stream      
+                    "-vframes", "1",       # Capture a single frame
+                    "-f", "image2pipe",    # Output format as raw image data
+                    "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
+                    "-"
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True
             )
             payload = result.stdout  # Binary data of the frame
         except subprocess.CalledProcessError as e:
             print(f"Error capturing frame: {e.stderr.decode()}")
             return
-        self.client.publish(self.topic, payload, qos=1)
+        
+        # save in filesystem for debugging purposes
         with open(f"snapshot.jpg","wb") as f:
             f.write(payload)
-        
+        attributes_dict={"published_at": datetime.datetime.isoformat()}
+        logger.info("published snapshot")
+        self.client.publish(self.subtopics_dict["topic"], payload, qos=1)
+        self.client.publish(self.subtopics_dict["json_attributes"], json.dumps(attributes_dict) , qos=1)
+
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
     ROOT_TOPIC = "home/doorbell"
