@@ -2,7 +2,7 @@ import logging
 import json
 import time
 from gpiozero import Button, DigitalOutputDevice, DigitalInputDevice
-from signal import pause
+import signal
 import subprocess
 import paho.mqtt.client as mqtt
 
@@ -263,6 +263,8 @@ class DoorBellDevice:
 
         self.client.on_connect = on_connect
         self.client.on_message = on_message
+        signal.signal(signal.SIGINT, self.shutdown)
+        signal.signal(signal.SIGTERM, self.shutdown)
 
 
     def shutdown(self):
@@ -270,6 +272,8 @@ class DoorBellDevice:
         del self.components
         self.components = []
         self.stop_go2rtc()
+        self.client.loop_stop()
+        self.client.disconnect()
     
     def start_go2rtc(self):
         logging.info("Starting video stream...")
@@ -303,15 +307,11 @@ def main():
 
     try:
         # Wait for events indefinitely
-        pause()
+        signal.pause()
     except KeyboardInterrupt:
         logging.info("CTRL+c Manually exiting script...")
     except Exception as e:
         logging.error(f"Unexpected error: {e}", exc_info=True)
-    finally:
-        doorbell.shutdown()        
-        client.loop_stop()
-        client.disconnect()
 
 if __name__ == "__main__":
     main()
