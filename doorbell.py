@@ -170,6 +170,8 @@ class Camera(Component):
             print(f"Error capturing frame: {e.stderr.decode()}")
             return
         self.client.publish(self.topic, payload, qos=1)
+        with open(f"snapshot.jpg","wb") as f:
+            f.write(payload)
         
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
