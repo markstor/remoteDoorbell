@@ -151,8 +151,14 @@ class Camera(Component):
                 [
                     "ffmpeg",
                     "-hide_banner",        # Remove initial welcome log
-                    "-v","error",          # Reduce verbosity
-                    "-i", "/dev/video0",        # Input RTSP stream      
+                    # "-v","error",          # Reduce verbosity
+                    "-i", "/dev/video0",   # Input RTSP stream      
+                    "-f", "v4l2",    # Use Video4Linux2 as input format
+                    "-i", "/dev/video0",  # Input device
+                    "-r", "10",           # Set frame rate (irrelevant for a single frame but needed by some devices)
+                    "-pix_fmt", "yuv420p", # Set pixel format
+                    "-c:v", "h264_v4l2m2m",      # Encode as MJPEG (or another format if needed)
+                    "-frames:v", "1",     # Capture only one frame
                     "-vframes", "1",       # Capture a single frame
                     "-f", "image2pipe",    # Output format as raw image data
                     "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
@@ -171,9 +177,9 @@ class Camera(Component):
         with open(f"snapshot.jpg","wb") as f:
             f.write(payload)
         attributes_dict={"published_at": datetime.datetime.today().isoformat()}
-        logger.info("published snapshot")
         self.client.publish(self.subtopics_dict()["topic"], payload, qos=1)
         self.client.publish(self.subtopics_dict()["json_attributes_topic"], json.dumps(attributes_dict) , qos=1)
+        logger.info("Published snapshot")
 
 class DoorBellDevice:
     DEVICE_UNIQUE_ID = "doorbell1234"
@@ -297,7 +303,7 @@ class DoorBellDevice:
         self.stop_go2rtc()
 
 def main():
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s - %(message)s')
     
     client = mqtt.Client()
     
