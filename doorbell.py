@@ -151,12 +151,10 @@ class Camera(Component):
                 [
                     "ffmpeg",
                     "-hide_banner",        # Remove initial welcome log
-                    # "-v","error",          # Reduce verbosity
-                    "-f", "v4l2",    # Use Video4Linux2 as input format
-                    "-i", "/dev/video0",  # Input device
-                    "-r", "10",           # Set frame rate (irrelevant for a single frame but needed by some devices)
-                    "-pix_fmt", "yuv420p", # Set pixel format
-                    "-c:v", "h264_v4l2m2m",# Encode as MJPEG (or another format if needed)
+                    "-v","error",          # Reduce verbosity
+                    "-ss","00:00:05",      # Let 6 seconds pass
+                    "-i", "/dev/video0",   # Input device
+                    "-r", "10",            # Set frame rate (irrelevant for a single frame but needed by some devices)
                     "-vframes", "1",       # Capture a single frame
                     "-f", "image2pipe",    # Output format as raw image data
                     "-vcodec", "mjpeg",    # Encode as JPEG (adjust as needed)
