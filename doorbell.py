@@ -290,6 +290,7 @@ class DoorBellDevice:
         subprocess.Popen(["killall", "ffmpeg"])
 
     def start_video_stream(self):
+        time.sleep(1)
         self.camera.publish_frame()
         self.start_go2rtc()
     def stop_video_stream(self):
